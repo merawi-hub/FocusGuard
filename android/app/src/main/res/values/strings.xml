@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FocusGuard</string>
+    <string name="accessibility_service_description">FocusGuard uses this service strictly to detect when restricted applications open in the foreground, allowing it to display your configured daily usage limit screen and prevent distraction. FocusGuard does NOT inspect your screen content, keystrokes, or personal data.</string>
+</resources>
+
