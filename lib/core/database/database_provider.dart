@@ -28,6 +28,11 @@ final dailyRoutinesStreamProvider = StreamProvider<List<DailyRoutine>>((ref) {
   return db.watchAllRoutines();
 });
 
+final todayUsageSessionsStreamProvider = StreamProvider<List<UsageSession>>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return db.watchTodayUsageSessions();
+});
+
 final activeFocusSessionsStreamProvider = StreamProvider<List<FocusSession>>((ref) {
   final db = ref.watch(appDatabaseProvider);
   return db.watchActiveFocusSessions();

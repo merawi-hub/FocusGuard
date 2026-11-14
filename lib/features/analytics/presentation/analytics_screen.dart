@@ -1,11 +1,14 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../app/theme/colors.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/utilities/duration_formatter.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/metric_tile.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/status_badge.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
@@ -188,6 +191,76 @@ class AnalyticsScreen extends ConsumerWidget {
                     ),
                   );
                 }),
+              const SizedBox(height: 24),
+
+              // Recent Usage Sessions (from UsageEvents)
+              SectionHeader(title: 'Detailed Session Activity (UsageEvents)'),
+              Consumer(
+                builder: (context, ref, _) {
+                  final sessionsAsync = ref.watch(todayUsageSessionsStreamProvider);
+                  final monitoredAppsAsync = ref.watch(monitoredAppsStreamProvider);
+
+                  return sessionsAsync.when(
+                    data: (sessions) {
+                      if (sessions.isEmpty) {
+                        return AppCard(
+                          padding: const EdgeInsets.all(18),
+                          child: Center(
+                            child: Text(
+                              'Individual session intervals will appear here as you use monitored apps.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+
+                      final monitoredApps = monitoredAppsAsync.asData?.value ?? [];
+                      final appMap = {for (final a in monitoredApps) a.id: a.appName};
+                      final timeFormat = DateFormat('h:mm a');
+
+                      return Column(
+                        children: sessions.take(10).map((session) {
+                          final appName = appMap[session.monitoredAppId] ?? 'Application';
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: AppCard(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.history_toggle_off_rounded, size: 18, color: AppColors.primaryCyan),
+                                      const SizedBox(width: 10),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(appName, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 13)),
+                                          Text(
+                                            '${timeFormat.format(session.startedAt)} - ${timeFormat.format(session.endedAt)}',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  StatusBadge(
+                                    label: DurationFormatter.formatSeconds(session.durationSeconds),
+                                    color: AppColors.primaryCyan,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                    loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primaryCyan)),
+                    error: (err, _) => Text('Error loading sessions: $err'),
+                  );
+                },
+              ),
               const SizedBox(height: 30),
             ],
           );

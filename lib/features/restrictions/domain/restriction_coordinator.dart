@@ -7,7 +7,6 @@ class RestrictionCoordinator {
   final AppDatabase database;
   final RestrictionEngine engine;
 
-  // Track sent warnings per package for today: Map<packageName, Set<thresholdPercentage>>
   final Map<String, Set<int>> _sentWarningsToday = {};
   DateTime _lastResetDate = DateTime.now();
 
@@ -26,6 +25,55 @@ class RestrictionCoordinator {
     }
   }
 
+  /// Synchronizes monitored package list and daily limit seconds to native background storage
+  Future<void> syncToNative() async {
+    final monitoredApps = await database.getAllMonitoredApps();
+    final packages = monitoredApps
+        .where((a) => a.isMonitored)
+        .map((a) => a.platformAppId)
+        .toList();
+
+    final Map<String, int> limits = {};
+    for (final app in monitoredApps) {
+      if (!app.isMonitored) continue;
+      final limit = await database.getLimitForApp(app.id);
+      if (limit != null && limit.isEnabled) {
+        limits[app.platformAppId] = limit.dailyLimitSeconds;
+      }
+    }
+
+    await engine.setMonitoredPackages(packages, limits);
+  }
+
+  /// Synchronizes precise session intervals from native UsageEvents into Drift SQLite
+  Future<void> syncUsageSessions() async {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final monitoredApps = await database.getAllMonitoredApps();
+    final packageMap = {for (final a in monitoredApps) a.platformAppId: a};
+
+    final sessions = await engine.getUsageSessions(
+      startTime: startOfDay,
+      endTime: now,
+      packageNames: packageMap.keys.toList(),
+    );
+
+    for (final session in sessions) {
+      final app = packageMap[session.packageName];
+      if (app == null) continue;
+
+      await database.insertUsageSession(
+        UsageSessionsCompanion(
+          monitoredAppId: Value(app.id),
+          startedAt: Value(session.startedAt),
+          endedAt: Value(session.endedAt),
+          durationSeconds: Value(session.durationSeconds),
+          source: Value(session.source),
+        ),
+      );
+    }
+  }
+
   Future<void> evaluateAndEnforce() async {
     _checkDailyReset();
 
@@ -38,6 +86,9 @@ class RestrictionCoordinator {
         .toList();
 
     if (monitoredPackages.isEmpty) return;
+
+    // Sync configuration with native WorkManager and Accessibility
+    await syncToNative();
 
     final usageStats = await engine.getApplicationUsageStatistics(
       packageNames: monitoredPackages,
@@ -54,7 +105,6 @@ class RestrictionCoordinator {
       final usedSeconds = usageStats[app.platformAppId] ?? 0;
       final sentThresholds = _sentWarningsToday[app.platformAppId] ?? {};
 
-      // Parse thresholds list (default: [50, 80, 100])
       final thresholds = [50, 80, 100];
 
       final evaluation = LimitEvaluator.evaluate(
@@ -64,7 +114,7 @@ class RestrictionCoordinator {
         alreadySentThresholds: sentThresholds,
       );
 
-      // Record summary in local database
+      // Record daily summary in local database
       await database.upsertDailySummary(
         DailyUsageSummariesCompanion(
           monitoredAppId: Value(app.id),
@@ -78,7 +128,6 @@ class RestrictionCoordinator {
       );
 
       if (evaluation.shouldRestrict) {
-        // Enforce restriction natively
         await engine.addApplicationRestriction(
           app.platformAppId,
           limitSeconds: limit.dailyLimitSeconds,
@@ -124,6 +173,9 @@ class RestrictionCoordinator {
         );
       }
     }
+
+    // Capture precise sessions
+    await syncUsageSessions();
   }
 
   Future<bool> requestEmergencyUnlock({
@@ -164,4 +216,3 @@ class RestrictionCoordinator {
     return false;
   }
 }
-

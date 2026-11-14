@@ -1,5 +1,6 @@
 import '../../shared/models/permission_status.dart';
 import '../../shared/models/platform_app.dart';
+import '../../shared/models/usage_session_item.dart';
 
 abstract class RestrictionEngine {
   /// Check current status of required permissions
@@ -22,6 +23,19 @@ abstract class RestrictionEngine {
 
   /// Retrieve today's usage statistics in seconds mapped by package name
   Future<Map<String, int>> getApplicationUsageStatistics({List<String>? packageNames});
+
+  /// Retrieve precise session intervals from UsageEvents
+  Future<List<UsageSessionItem>> getUsageSessions({
+    required DateTime startTime,
+    required DateTime endTime,
+    List<String>? packageNames,
+  });
+
+  /// Synchronize monitored packages and configured limits to native background services
+  Future<bool> setMonitoredPackages(List<String> packageNames, Map<String, int> limits);
+
+  /// Schedule periodic background WorkManager monitoring
+  Future<bool> schedulePeriodicMonitoring();
 
   /// Apply restrictions to a batch of package names
   Future<bool> applyApplicationRestrictions(List<String> packageNames);
@@ -60,4 +74,3 @@ abstract class RestrictionEngine {
     required int limitMinutes,
   });
 }
-

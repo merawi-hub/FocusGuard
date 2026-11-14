@@ -68,6 +68,15 @@ class AppDatabase extends _$AppDatabase {
   Future<int> insertUsageSession(UsageSessionsCompanion session) =>
       into(usageSessions).insert(session);
 
+  Stream<List<UsageSession>> watchTodayUsageSessions() {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    return (select(usageSessions)
+          ..where((tbl) => tbl.startedAt.isBiggerOrEqualValue(startOfDay))
+          ..orderBy([(tbl) => OrderingTerm.desc(tbl.startedAt)]))
+        .watch();
+  }
+
   Future<int> upsertDailySummary(DailyUsageSummariesCompanion summary) =>
       into(dailyUsageSummaries).insertOnConflictUpdate(summary);
 

@@ -30,24 +30,25 @@ FocusGuard is developed across structured phases to ensure stability, reliabilit
 
 ---
 
-### Phase 2: Live Background Tracking & Periodic Usage Sync
-- [ ] Integration of Android `WorkManager` for background usage aggregation every 15 minutes.
-- [ ] Session interval calculation using `UsageEvents.Event.MOVE_TO_FOREGROUND` and `MOVE_TO_BACKGROUND`.
-- [ ] Native periodic alarm triggers for non-accessibility fallback monitoring.
+### Phase 2: Live Background Tracking & Periodic Usage Sync (COMPLETED)
+- [x] Integration of Android `WorkManager` (`UsageMonitorWorker`) for autonomous background usage aggregation every 15 minutes.
+- [x] Session interval calculation using `UsageEvents.Event.MOVE_TO_FOREGROUND` and `MOVE_TO_BACKGROUND` in `UsageTracker.kt`.
+- [x] Synchronization of granular session intervals into Drift `UsageSessions` table.
+- [x] Native active foreground tracking in `FocusAccessibilityService` checking usage during active sessions every 15s.
 
 ---
 
-### Phase 3: Android Warning Escalation & Strict Lockout
-- [ ] Heads-up interactive notifications with quick action buttons (e.g. "Snooze 5m", "Close App").
-- [ ] Soft mode visual banner overlay option (floating pill displaying remaining seconds).
-- [ ] Strict mode hardware back button override and task affinity isolation.
+### Phase 3: Android Warning Escalation & Strict Lockout (COMPLETED)
+- [x] Multi-tier warning thresholds (50%, 80%, 100%) with duplicate prevention per daily cycle in `RestrictionManager`.
+- [x] Native blocking screen (`RestrictionBlockerActivity`) launched immediately upon restricted launch or limit exhaustion.
+- [x] Home navigation escape and deliberate emergency unlock dialog.
 
 ---
 
-### Phase 4: Emergency Unlock & Scheduled Reset Engine
-- [ ] Native `AlarmManager` exact scheduling for emergency unlock expiration (re-locking automatically without requiring Flutter process to stay in memory).
-- [ ] Midnight (00:00) native broadcast receiver to reset daily usage counters and unblock restricted apps for the new day.
-- [ ] Device reboot receiver (`android.intent.action.BOOT_COMPLETED`) to re-sync restrictions upon system restart.
+### Phase 4: Emergency Unlock & Scheduled Reset Engine (COMPLETED)
+- [x] Native `AlarmManager` exact scheduling (`EmergencyUnlockReceiver`) for 10-minute temporary unlock expiration (re-locking automatically without requiring Flutter process to stay in memory).
+- [x] Midnight (00:00) native broadcast receiver (`DailyResetReceiver`) to reset daily usage counters and unblock restricted apps for the new day.
+- [x] Device reboot & timezone change receiver (`BootReceiver`) to re-sync restrictions, re-arm midnight alarms, and re-enqueue WorkManager tasks.
 
 ---
 

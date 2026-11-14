@@ -140,20 +140,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
             child: Column(
               children: [
                 ListTile(
+                  leading: const Icon(Icons.sync_rounded, color: AppColors.primaryCyan),
+                  title: const Text('Run Background WorkManager Sync'),
+                  subtitle: const Text('Triggers immediate background usage evaluation & WorkManager re-queue'),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await engine.schedulePeriodicMonitoring();
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Background WorkManager task triggered.'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  },
+                ),
+                const Divider(color: AppColors.darkBorder),
+                ListTile(
                   leading: const Icon(Icons.delete_sweep_outlined, color: AppColors.danger),
                   title: const Text('Reset All Active Restrictions'),
                   subtitle: const Text('Clears all current lockouts and temporary unlocks'),
                   onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
                     await engine.applyApplicationRestrictions([]);
-                    if (context.mounted) {
-                      ref.invalidate(restrictedPackagesProvider);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('All restrictions cleared successfully.'),
-                          backgroundColor: AppColors.success,
-                        ),
-                      );
-                    }
+                    ref.invalidate(restrictedPackagesProvider);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('All restrictions cleared successfully.'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
                   },
                 ),
               ],

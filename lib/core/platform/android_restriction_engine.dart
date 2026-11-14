@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import '../constants/app_constants.dart';
 import '../../shared/models/permission_status.dart';
 import '../../shared/models/platform_app.dart';
+import '../../shared/models/usage_session_item.dart';
 import 'restriction_engine.dart';
 
 class AndroidRestrictionEngine implements RestrictionEngine {
@@ -105,6 +106,54 @@ class AndroidRestrictionEngine implements RestrictionEngine {
       return usage;
     } catch (_) {
       return {};
+    }
+  }
+
+  @override
+  Future<List<UsageSessionItem>> getUsageSessions({
+    required DateTime startTime,
+    required DateTime endTime,
+    List<String>? packageNames,
+  }) async {
+    try {
+      final dynamic result = await _channel.invokeMethod('getUsageSessions', {
+        'startTime': startTime.millisecondsSinceEpoch,
+        'endTime': endTime.millisecondsSinceEpoch,
+        'packages': packageNames,
+      });
+
+      if (result is List) {
+        return result.map((item) {
+          final map = Map<String, dynamic>.from(item as Map);
+          return UsageSessionItem.fromMap(map);
+        }).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Future<bool> setMonitoredPackages(List<String> packageNames, Map<String, int> limits) async {
+    try {
+      final bool? res = await _channel.invokeMethod('setMonitoredPackages', {
+        'packages': packageNames,
+        'limits': limits,
+      });
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> schedulePeriodicMonitoring() async {
+    try {
+      final bool? res = await _channel.invokeMethod('schedulePeriodicMonitoring');
+      return res ?? false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -232,4 +281,3 @@ class AndroidRestrictionEngine implements RestrictionEngine {
     }
   }
 }
-

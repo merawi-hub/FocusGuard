@@ -5,6 +5,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.focusguard.app.native.permissions.PermissionHelper
 import com.focusguard.app.native.usage.UsageTracker
+import com.focusguard.app.native.usage.WorkScheduler
 import com.focusguard.app.native.restrictions.RestrictionManager
 import com.focusguard.app.native.notifications.NotificationHelper
 
@@ -19,6 +20,7 @@ class MainActivity : FlutterActivity() {
         val usageTracker = UsageTracker(this)
 
         NotificationHelper.createNotificationChannels(this)
+        WorkScheduler.schedulePeriodicMonitoring(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -68,6 +70,19 @@ class MainActivity : FlutterActivity() {
                         }
                     }.start()
                 }
+                "getUsageSessions" -> {
+                    Thread {
+                        try {
+                            val startTime = call.argument<Long>("startTime") ?: (System.currentTimeMillis() - 86400000L)
+                            val endTime = call.argument<Long>("endTime") ?: System.currentTimeMillis()
+                            val packages = call.argument<List<String>>("packages")?.toSet()
+                            val sessions = usageTracker.getUsageSessions(startTime, endTime, packages)
+                            runOnUiThread { result.success(sessions) }
+                        } catch (e: Exception) {
+                            runOnUiThread { result.error("USAGE_SESSIONS_ERROR", e.message, null) }
+                        }
+                    }.start()
+                }
                 "setAppRestrictions" -> {
                     try {
                         val packages = call.argument<List<String>>("packages") ?: emptyList()
@@ -75,6 +90,28 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("RESTRICTION_ERROR", e.message, null)
+                    }
+                }
+                "setMonitoredPackages" -> {
+                    try {
+                        val packages = call.argument<List<String>>("packages") ?: emptyList()
+                        val limits = call.argument<Map<String, Int>>("limits") ?: emptyMap()
+                        restrictionManager.setMonitoredPackages(packages)
+                        for ((pkg, limitSec) in limits) {
+                            restrictionManager.setPackageLimitSeconds(pkg, limitSec.toLong())
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("MONITORED_PACKAGES_ERROR", e.message, null)
+                    }
+                }
+                "schedulePeriodicMonitoring" -> {
+                    try {
+                        WorkScheduler.schedulePeriodicMonitoring(this)
+                        WorkScheduler.runImmediateCheck(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("WORK_SCHEDULER_ERROR", e.message, null)
                     }
                 }
                 "addAppRestriction" -> {
@@ -168,4 +205,3 @@ class MainActivity : FlutterActivity() {
         }
     }
 }
-

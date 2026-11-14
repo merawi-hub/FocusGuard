@@ -56,7 +56,6 @@ class UsageTracker(private val context: Context) {
                     val iconDrawable = resolveInfo.loadIcon(pm)
                     iconString = drawableToBase64(iconDrawable)
                 } catch (e: Exception) {
-                    // Fallback to null icon if decoding fails
                     iconString = null
                 }
             }
@@ -118,6 +117,99 @@ class UsageTracker(private val context: Context) {
         }
     }
 
+    fun getUsageSessions(
+        startTime: Long,
+        endTime: Long,
+        packageFilter: Set<String>? = null
+    ): List<Map<String, Any>> {
+        if (usageStatsManager == null) return emptyList()
+
+        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+        val event = UsageEvents.Event()
+
+        val appOpenTimes = mutableMapOf<String, Long>()
+        val sessions = mutableListOf<Map<String, Any>>()
+
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+            val pkg = event.packageName ?: continue
+
+            if (packageFilter != null && !packageFilter.contains(pkg)) {
+                continue
+            }
+
+            when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED,
+                UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                    appOpenTimes[pkg] = event.timeStamp
+                }
+                UsageEvents.Event.ACTIVITY_PAUSED,
+                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                    val openTime = appOpenTimes.remove(pkg)
+                    if (openTime != null && event.timeStamp > openTime) {
+                        val durationSeconds = (event.timeStamp - openTime) / 1000
+                        if (durationSeconds > 0) {
+                            sessions.add(
+                                mapOf(
+                                    "packageName" to pkg,
+                                    "startedAt" to openTime,
+                                    "endedAt" to event.timeStamp,
+                                    "durationSeconds" to durationSeconds,
+                                    "source" to "usage_events"
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // For any currently open app that hasn't paused yet:
+        for ((pkg, openTime) in appOpenTimes) {
+            val durationSeconds = (endTime - openTime) / 1000
+            if (durationSeconds > 0) {
+                sessions.add(
+                    mapOf(
+                        "packageName" to pkg,
+                        "startedAt" to openTime,
+                        "endedAt" to endTime,
+                        "durationSeconds" to durationSeconds,
+                        "source" to "usage_events"
+                    )
+                )
+            }
+        }
+
+        return sessions.sortedByDescending { it["startedAt"] as Long }
+    }
+
+    fun getUsageSecondsToday(packageName: String): Long {
+        if (usageStatsManager == null) return 0L
+
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val startTime = cal.timeInMillis
+        val endTime = System.currentTimeMillis()
+
+        val usageStats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY,
+            startTime,
+            endTime
+        ) ?: return 0L
+
+        var totalMillis = 0L
+        for (stat in usageStats) {
+            if (stat.packageName == packageName) {
+                totalMillis += stat.totalTimeInForeground
+            }
+        }
+        return totalMillis / 1000
+    }
+
     private fun drawableToBase64(drawable: Drawable): String {
         val bitmap = if (drawable is BitmapDrawable && drawable.bitmap != null) {
             drawable.bitmap
@@ -131,7 +223,6 @@ class UsageTracker(private val context: Context) {
             bmp
         }
 
-        // Scale down to icon size (e.g., 96x96) for performance and light IPC
         val scaled = Bitmap.createScaledBitmap(bitmap, 96, 96, true)
         val stream = ByteArrayOutputStream()
         scaled.compress(Bitmap.CompressFormat.PNG, 85, stream)
@@ -139,4 +230,3 @@ class UsageTracker(private val context: Context) {
         return Base64.encodeToString(byteArray, Base64.NO_WRAP)
     }
 }
-
